@@ -1,0 +1,339 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  SUPER_ADMIN
+  ADMIN
+  INSTRUCTOR
+  STUDENT
+}
+
+model User {
+  id              String           @id @default(cuid())
+  email           String           @unique
+  name            String
+  password        String
+  role            Role             @default(STUDENT)
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  courses         Course[]         @relation("InstructorCourses")
+  enrollments     Enrollment[]
+  lessonProgress  LessonProgress[]
+  certificates  Certificate[]
+  quizAttempts  QuizAttempt[]
+  submissions   Submission[]
+  forumThreads ForumThread[]
+  forumReplies ForumReply[]
+  createdSchools School[]
+  schoolEnrollments SchoolEnrollment[]
+}
+
+model Course {
+  id           String       @id @default(cuid())
+  title        String
+  description  String
+  price        Decimal      @default(0)
+  published    Boolean      @default(false)
+  instructorId String
+  instructor   User         @relation("InstructorCourses", fields: [instructorId], references: [id])
+  modules      Module[]
+  enrollments  Enrollment[]
+  certificates Certificate[]
+  assignments  Assignment[]  // ← Add this line
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  liveClasses  LiveClass[]
+  forumThreads ForumThread[]
+  imageUrl    String? 
+  resources    Resource[] 
+}
+
+model Module {
+  id        String   @id @default(cuid())
+  title     String
+  order     Int
+  courseId  String
+  course    Course   @relation(fields: [courseId], references: [id])
+  lessons   Lesson[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Lesson {
+  id             String           @id @default(cuid())
+  title          String
+  content        String?
+  videoUrl       String?          // ← Add this
+  order          Int
+  moduleId       String
+  module         Module           @relation(fields: [moduleId], references: [id])
+  lessonProgress LessonProgress[]
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  quiz          Quiz?
+}
+
+model Enrollment {
+  id        String   @id @default(cuid())
+  userId    String
+  courseId  String
+  progress  Float    @default(0)
+  user      User     @relation(fields: [userId], references: [id])
+  course    Course   @relation(fields: [courseId], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, courseId])
+}
+
+model LessonProgress {
+  id        String   @id @default(cuid())
+  userId    String
+  lessonId  String
+  completed Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user   User   @relation(fields: [userId], references: [id])
+  lesson Lesson @relation(fields: [lessonId], references: [id])
+
+  @@unique([userId, lessonId])
+}
+
+model Certificate {
+  id        String   @id @default(cuid())
+  userId    String
+  courseId  String
+  issuedAt  DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id])
+  course    Course   @relation(fields: [courseId], references: [id])
+
+  @@unique([userId, courseId])
+}
+
+model Quiz {
+  id              String         @id @default(cuid())
+  title           String
+  description     String?
+  lessonId        String?        @unique
+  schoolLessonId  String?        @unique
+  passingScore    Int            @default(70)
+  examType        String?        // "TEST", "CA", "MIDTERM", "FINAL"
+  term            String?        // "FIRST_TERM", "SECOND_TERM", "THIRD_TERM"
+  timeLimit       Int?           // Time limit in minutes
+  totalMarks      Int?           // Total marks for the exam
+  startDate       DateTime?      // When the exam becomes available
+  endDate         DateTime?      // Deadline
+  lesson          Lesson?        @relation(fields: [lessonId], references: [id])
+  schoolLesson    SchoolLesson?  @relation(fields: [schoolLessonId], references: [id])
+  questions       Question[]
+  attempts        QuizAttempt[]
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+}
+
+model Question {
+  id        String         @id @default(cuid())
+  quizId    String
+  text      String
+  type      QuestionType   @default(MULTIPLE_CHOICE)
+  points    Int            @default(1)
+  order     Int            @default(1)
+  quiz      Quiz           @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  options   QuestionOption[]
+  answers   QuizAnswer[]
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+}
+
+enum QuestionType {
+  MULTIPLE_CHOICE
+  TRUE_FALSE
+  SHORT_ANSWER
+}
+
+model QuestionOption {
+  id         String   @id @default(cuid())
+  questionId String
+  text       String
+  isCorrect  Boolean  @default(false)
+  question   Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+}
+
+model QuizAttempt {
+  id         String       @id @default(cuid())
+  userId     String
+  quizId     String
+  score      Int          @default(0)
+  passed     Boolean      @default(false)
+  user       User         @relation(fields: [userId], references: [id])
+  quiz       Quiz         @relation(fields: [quizId], references: [id])
+  answers    QuizAnswer[]
+  createdAt  DateTime     @default(now())
+}
+
+model QuizAnswer {
+  id         String      @id @default(cuid())
+  attemptId  String
+  questionId String
+  answer     String
+  isCorrect  Boolean     @default(false)
+  attempt    QuizAttempt @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  question   Question    @relation(fields: [questionId], references: [id])
+}
+
+model Assignment {
+  id              String          @id @default(cuid())
+  title           String
+  description     String?
+  dueDate         DateTime?
+  courseId        String?
+  schoolSubjectId String?
+  maxPoints       Int             @default(100)
+  course          Course?         @relation(fields: [courseId], references: [id])
+  schoolSubject   SchoolSubject?  @relation(fields: [schoolSubjectId], references: [id])
+  submissions     Submission[]
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+}
+
+model Submission {
+  id           String     @id @default(cuid())
+  assignmentId String
+  userId       String
+  content      String?
+  fileUrl      String?
+  grade        Int?
+  feedback     String?
+  assignment   Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  user         User       @relation(fields: [userId], references: [id])
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+}
+
+model LiveClass {
+  id          String   @id @default(cuid())
+  title       String
+  description String?
+  courseId    String
+  roomName    String   @unique
+  scheduledAt DateTime
+  duration    Int      @default(60)
+  isActive    Boolean  @default(false)
+  course      Course   @relation(fields: [courseId], references: [id])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model ForumThread {
+  id        String    @id @default(cuid())
+  title     String
+  content   String
+  courseId  String
+  userId    String
+  course    Course    @relation(fields: [courseId], references: [id])
+  user      User      @relation(fields: [userId], references: [id])
+  replies   ForumReply[]
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
+
+model ForumReply {
+  id        String      @id @default(cuid())
+  content   String
+  threadId  String
+  userId    String
+  thread    ForumThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  user      User        @relation(fields: [userId], references: [id])
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+}
+
+model Resource {
+  id        String   @id @default(cuid())
+  title     String
+  fileUrl   String
+  courseId  String
+  course    Course   @relation(fields: [courseId], references: [id])
+  createdAt DateTime @default(now())
+}
+
+// ========== Flexible School System ==========
+
+model School {
+  id          String       @id @default(cuid())
+  name        String       // e.g., "Lagos Academy", "Abuja High School"
+  description String?
+  logo        String?
+  published   Boolean      @default(false)
+  createdBy   String
+  creator     User         @relation(fields: [createdBy], references: [id])
+  classes     SchoolClass[]
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+}
+
+model SchoolClass {
+  id        String         @id @default(cuid())
+  name      String         // e.g., "JSS 1", "Year 7", "Grade 10"
+  schoolId  String
+  school    School         @relation(fields: [schoolId], references: [id])
+  subjects  SchoolSubject[]
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+}
+
+model SchoolSubject {
+  id          String            @id @default(cuid())
+  name        String
+  code        String?
+  classId     String
+  class       SchoolClass       @relation(fields: [classId], references: [id])
+  topics      SchoolTopic[]
+  enrollments SchoolEnrollment[]
+  assignments Assignment[]      // ← Add this
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+}
+
+model SchoolTopic {
+  id        String         @id @default(cuid())
+  title     String
+  order     Int
+  subjectId String
+  subject   SchoolSubject  @relation(fields: [subjectId], references: [id])
+  lessons   SchoolLesson[]
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+}
+
+model SchoolLesson {
+  id        String      @id @default(cuid())
+  title     String
+  content   String?
+  videoUrl  String?
+  order     Int
+  topicId   String
+  topic     SchoolTopic @relation(fields: [topicId], references: [id])
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+  quiz      Quiz?
+}
+
+model SchoolEnrollment {
+  id        String        @id @default(cuid())
+  userId    String
+  subjectId String
+  progress  Float         @default(0)
+  user      User          @relation(fields: [userId], references: [id])
+  subject   SchoolSubject @relation(fields: [subjectId], references: [id])
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  @@unique([userId, subjectId])
+}
